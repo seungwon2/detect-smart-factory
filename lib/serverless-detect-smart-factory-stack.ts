@@ -1,16 +1,15 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 
 export class ServerlessDetectSmartFactoryStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
-
-    // example resource
-    // const queue = new sqs.Queue(this, 'ServerlessDetectSmartFactoryQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    const hello = new lambda.Function(this, 'testHandler', {
+      runtime: lambda.Runtime.NODEJS_16_X,    // execution environment
+      code: lambda.Code.fromAsset('lambda'),  // code loaded from "lambda" directory
+      handler: 'test.handler'                // file is "test", function is "handler"
+    });
   }
 }
