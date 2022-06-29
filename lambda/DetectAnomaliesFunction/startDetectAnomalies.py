@@ -22,8 +22,8 @@ import os
 import logging
 
 # Environment Variables
-LFV_PROJECT_NAME = os.environ['LFV_PROJECT_NAME']
-LFV_MODEL_VERSION = os.environ['LFV_MODEL_VERSION']
+PROJECT_NAME = os.environ['PROJECT_NAME']
+MODEL_VERSION = os.environ['MODEL_VERSION']
 REGION = os.environ.get('REGION', 'us-east-1')
 # Initiate clients
 lookoutvision = boto3.client('lookoutvision')
@@ -42,6 +42,23 @@ def lambda_handler(event, context):
         print(e)
         raise e
 
+
+# response = client.detect_anomalies(
+#     ProjectName='string',
+#     ModelVersion='string',
+#     Body=b'bytes'|file,
+#     ContentType='string'
+# )
+
+# {
+#     'DetectAnomalyResult': {
+#         'Source': {
+#             'Type': 'string'
+#         },
+#         'IsAnomalous': True|False,
+#         'Confidence': ...
+#     }
+# }
 
 def detect_anomalies(bucket, key):
 

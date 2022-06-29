@@ -20,28 +20,6 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // 아래 링크 보고 웹사이트 UI버킷 만들 수 있음!!!!
-    // https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_s3_deployment-readme.html
-
-    // ************************Website Bucket***************************//
-    // S3 Bucket
-		// Host the static files for the angular app
-		// --------------------------------------------------------------------
-		const webSiteBucket = new s3.Bucket(this, "SmartFactoryFront", {
-			publicReadAccess: true,
-			websiteIndexDocument: 'index.html',
-			removalPolicy: cdk.RemovalPolicy.DESTROY
-		});
-    webSiteBucket.grantReadWrite(s3BatchOperationsRole)
-
-		// Deployment:
-		// --------------------------------------------------------------------
-    const deployment = new s3_deployment.BucketDeployment(this, 'DeployWebsite', {
-      sources: [s3_deployment.Source.asset(path.join(__dirname, '../web-ui'))],
-      destinationBucket: webSiteBucket,
-    });
-		// --------------------------------------------------------------------
-
     //**********SNS Topics******************************
     const jobCompletionTopic = new sns.Topic(this, 'JobCompletion');
 
@@ -56,6 +34,11 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
         actions: ["sns:Publish"]
       })
     );
+
+    //step functions
+    // https://github.com/aws-samples/aws-cdk-examples/blob/1dcf893b1850af518075a24b677539fbbf71a475/typescript/stepfunctions-job-poller/index.ts
+
+    
 
 
     //**********S3 Batch Operations Role******************************

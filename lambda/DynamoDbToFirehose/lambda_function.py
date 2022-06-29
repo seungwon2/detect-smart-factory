@@ -34,7 +34,7 @@ def put_record_in_firehose(stream_record):
         transformed_item['ImageId'] = new_image_item['ImageId']['S']
         transformed_item['ImageUrl'] = new_image_item['ImageUrl']['S']
         transformed_item['DateTime'] = new_image_item['DateTime']['S']
-        transformed_item['IsAnomalous'] = new_image_item['IsAnomalous']['BOOL']
+        transformed_item['IsAnomalous'] = new_image_item['IsAnomalous']['S']
         transformed_item['Confidence'] = new_image_item['Confidence']['N']
         transformed_item['Year'] = date_time_obj.year
         transformed_item['Month'] = date_time_obj.month
