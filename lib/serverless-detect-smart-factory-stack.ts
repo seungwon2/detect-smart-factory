@@ -14,6 +14,7 @@ import * as eventsources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as fs from 'fs';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
 
 export class ServerlessDetectSmartFactoryStack extends Stack {
@@ -38,8 +39,8 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
     //step functions
     // https://github.com/aws-samples/aws-cdk-examples/blob/1dcf893b1850af518075a24b677539fbbf71a475/typescript/stepfunctions-job-poller/index.ts
 
-    
 
+    //step functions tasks
 
     //**********S3 Batch Operations Role******************************
     const s3BatchOperationsRole = new iam.Role(this, 'S3BatchOperationsRole', {
