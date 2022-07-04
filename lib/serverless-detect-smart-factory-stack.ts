@@ -16,13 +16,13 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as fs from 'fs';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
+import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { Pass } from '@aws-cdk/aws-stepfunctions';
 
 export class ServerlessDetectSmartFactoryStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-
     //lambda hanlders definiton
 
     const startStateMachineLambda = new lambda.Function(this, 'startLambda', {
@@ -52,8 +52,15 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
     });
-    //step function definition
 
+     //start bucket
+     const bucket = new s3.Bucket(this, "imageBucket");
+     bucket.grantReadWrite(startStateMachineLambda);
+     //trigger startStateMachine lambda on create object
+     bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(startStateMachineLambda));
+
+    //step function definition
+    const startStateMachine = new tasks.LambdaInvoke(this, 'stateStateMachineLambda', { lambdaFunction: startStateMachineLambda, outputPath: '$.Payload'});
     const DetectAnomalies = new tasks.LambdaInvoke(this, 'detectAnomaliesLambda', { lambdaFunction: detectAnomaliesLambda, outputPath: '$.Payload' });
     const classifyDefects = new tasks.LambdaInvoke(this, 'ClassifyDefects', { lambdaFunction: classifyDefectsLambda, outputPath: '$.Payload' });
     const putResult = new tasks.LambdaInvoke(this, 'putResult', { lambdaFunction: putResultInDBLambda, outputPath: '$.Payload' });
@@ -66,20 +73,25 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
 
     //create chain
     const choice = new sfn.Choice(this,'IsAnomaly?');
-    const pass = new sfn.Pass(this, 'pass');
+    const skip = new sfn.Pass(this, 'pass');
     choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',true), classifyDefects);
-    choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',false), pass);
+    choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',false), skip);
     choice.afterwards().next(putResult);
-    const definition = DetectAnomalies.next(choice);
+    const first = DetectAnomalies.next(choice);
+    const definition = startStateMachine.next(first);
+
 
     //create state machine
     const stateMachine = new sfn.StateMachine(this, 'stateMachine', {definition, timeout: cdk.Duration.minutes(5)});
 
     //lambda execution
+    startStateMachineLambda.grantInvoke(stateMachine.role);
     classifyDefectsLambda.grantInvoke(stateMachine.role);
     detectAnomaliesLambda.grantInvoke(stateMachine.role);
     putResultInDBLambda.grantInvoke(stateMachine.role);
 
+    const env = {STATE_MACHINE_ARN: stateMachine.stateMachineArn};
+    
     // //**********SNS Topics******************************
     // const jobCompletionTopic = new sns.Topic(this, 'JobCompletion');
 
@@ -164,7 +176,7 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
 
     // // S3 Event processor
     // const s3Processor = new lambda.Function(this, 'S3Processor', {
-    //   runtime: lambda.Runtime.PYTHON_3_7,
+    //   runtime: lambda.Runtime.PYTHON_3_9,
     //   code: lambda.Code.fromAsset('lambda/s3processor'),
     //   handler: 'lambda_function.lambda_handler',
     //   timeout: cdk.Duration.seconds(30),
