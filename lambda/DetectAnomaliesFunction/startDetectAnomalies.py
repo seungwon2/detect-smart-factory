@@ -24,7 +24,7 @@ import logging
 # Environment Variables
 PROJECT_NAME = os.environ['PROJECT_NAME']
 MODEL_VERSION = os.environ['MODEL_VERSION']
-REGION = os.environ.get('REGION', 'us-east-1')
+
 # Initiate clients
 lookoutvision = boto3.client('lookoutvision')
 s3 = boto3.client('s3')
@@ -33,8 +33,8 @@ print('Loading function')
 
 
 def lambda_handler(event, context):
-    bucket = event['Input']['Bucket']
-    key = event['Input']['Key']
+    bucket = event['Bucket']
+    key = event['Key']
     try:
         response = detect_anomalies(bucket, key)
         return response
@@ -42,23 +42,6 @@ def lambda_handler(event, context):
         print(e)
         raise e
 
-
-# response = client.detect_anomalies(
-#     ProjectName='string',
-#     ModelVersion='string',
-#     Body=b'bytes'|file,
-#     ContentType='string'
-# )
-
-# {
-#     'DetectAnomalyResult': {
-#         'Source': {
-#             'Type': 'string'
-#         },
-#         'IsAnomalous': True|False,
-#         'Confidence': ...
-#     }
-# }
 
 def detect_anomalies(bucket, key):
 
@@ -71,25 +54,22 @@ def detect_anomalies(bucket, key):
         image = response['Body']
         image_body = image.read()
 
-        camera_id = response['Metadata']['cameraid']
-        assembly_line_id = response['Metadata']['assemblylineid']
-        image_id = response['Metadata']['imageid']
-
         lookout_response = lookoutvision.detect_anomalies(
             ProjectName=project_name,
             ModelVersion=model_version,
             Body=image_body,
             ContentType=content_type
         )
+        lookout_result = {}
 
-        lookout_response['CameraId'] = camera_id
-        lookout_response['AssemblyLineId'] = assembly_line_id
-        lookout_response['ImageId'] = image_id
-        lookout_response['ImageUrl'] = 's3://'+bucket+'/'+key
+        lookout_result['Bucket'] = bucket
+        lookout_result["Key"] = key
+        lookout_result['ImageUrl'] = 's3://'+bucket+'/'+key
+        lookout_result['DetectAnomalyResult'] = {'IsAnomalous':lookout_response['DetectAnomalyResult']['IsAnomalous'] , 'Confidence' : lookout_response['DetectAnomalyResult']['Confidence']}
 
-        print(json.dumps(lookout_response))
+        print(json.dumps(lookout_result))
 
-        return lookout_response
+        return lookout_result
 
     except Exception as e:
 

@@ -20,12 +20,13 @@ import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { Pass } from '@aws-cdk/aws-stepfunctions';
 import { StateMachine } from 'aws-cdk-lib/aws-stepfunctions';
+import * as rekognition from "aws-cdk-lib/aws-rekognition";
 
 export class ServerlessDetectSmartFactoryStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-    //lambda hanlders definiton
 
+    //lambda hanlders definiton
     const classifyDefectsLambda = new lambda.Function(this, 'classifyLambda', {
       code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/classifyDefects.py', { encoding: 'utf-8' })),
       handler: 'index.lambda_handler',
@@ -33,18 +34,37 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       runtime: lambda.Runtime.PYTHON_3_9,
     });
 
+    classifyDefectsLambda.addToRolePolicy(    
+      new iam.PolicyStatement({
+      actions: ["rekognition:*"],
+      resources: ["*"]
+    }));
+
     const detectAnomaliesLambda = new lambda.Function(this, 'DetectLambda', {
       code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/startDetectAnomalies.py', { encoding: 'utf-8' })),
       handler: 'index.lambda_handler',
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
+      environment: {
+
+      }
     });
+
+    detectAnomaliesLambda.addToRolePolicy(    
+      new iam.PolicyStatement({
+      actions: ["lookoutvision:*"],
+      resources: ["*"]
+    }));
+
 
     const putResultInDBLambda = new lambda.Function(this, 'putDBLambda', {
       code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/putItemInDynamoDb.py', { encoding: 'utf-8' })),
       handler: 'index.lambda_handler',
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
+      environment: {
+        DYNAMODB_TABLE_NAME: ,
+      }
     });
    
 
@@ -62,11 +82,10 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
     //create chain
     const choice = new sfn.Choice(this,'IsAnomaly?');
     const skip = new sfn.Pass(this, 'pass');
-    choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',true), classifyDefects);
-    choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',false), skip);
+    choice.when(sfn.Condition.booleanEquals('$.DetectAnomalyResult.IsAnomalous',true), classifyDefects);
+    choice.when(sfn.Condition.booleanEquals('$.DetectAnomalyResult.IsAnomalous',false), skip);
     choice.afterwards().next(putResult);
     const definition = DetectAnomalies.next(choice);
-    // const definition = startStateMachine.next(first);
 
 
     //create state machine
@@ -88,53 +107,23 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       }
     });
 
-        // 👇 Create ACM Permission Policy
-        const describeAcmCertificates = new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              resources: ['arn:aws:acm:*:*:certificate/*'],
-              actions: ['acm:DescribeCertificate'],
-            }),
-          ],
-        });
-    
-        // 👇 Create Role
-        const role = new iam.Role(this, 'example-iam-role', {
-          assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-          description: 'An example IAM role in AWS CDK',
-          inlinePolicies: {
-            DescribeACMCerts: describeAcmCertificates,
-          },
-          managedPolicies: [
-            iam.ManagedPolicy.fromAwsManagedPolicyName(
-              'AmazonAPIGatewayInvokeFullAccess',
-            ),
-          ],
-        });
-    
-
     stateMachine.grantStartExecution(startStateMachineLambda);
+
     //start bucket
     const bucket = new s3.Bucket(this, "imageBucket");
     bucket.grantReadWrite(startStateMachineLambda);
+    bucket.grantReadWrite(classifyDefectsLambda);
+    bucket.grantReadWrite(detectAnomaliesLambda);
+ 
     
     //trigger startStateMachine lambda on create object
     bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(startStateMachineLambda));
+
     
     // //**********SNS Topics******************************
     // const jobCompletionTopic = new sns.Topic(this, 'JobCompletion');
 
     // //**********IAM Roles******************************
-    // const rekognitionServiceRole = new iam.Role(this, 'RekognitionServiceRole', {
-    //   assumedBy: new iam.ServicePrincipal('rekognition.amazonaws.com')
-    // });
-    // rekognitionServiceRole.addToPolicy(
-    //   new iam.PolicyStatement({
-    //     effect: iam.Effect.ALLOW,
-    //     resources: [jobCompletionTopic.topicArn],
-    //     actions: ["sns:Publish"]
-    //   })
-    // );
 
     // //step functions
     // // https://github.com/aws-samples/aws-cdk-examples/blob/1dcf893b1850af518075a24b677539fbbf71a475/typescript/stepfunctions-job-poller/index.ts

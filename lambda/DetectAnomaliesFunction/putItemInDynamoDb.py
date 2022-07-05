@@ -21,30 +21,29 @@ import urllib.request
 import datetime
 from decimal import Decimal
 
-REGION = os.environ.get('REGION', 'us-east-1')
 DYNAMODB_TABLE_NAME = os.environ['DYNAMODB_TABLE_NAME']
 
 # Initiate clients
 dynamodb = boto3.resource('dynamodb', region_name=REGION)
 
 def lambda_handler(event, context):
-    payload = event['Input']['Payload']
+
+    payload = event
     timestamp = datetime.datetime.now().isoformat()
 
     table = dynamodb.Table(DYNAMODB_TABLE_NAME)
+
     item = {}
-    item['CameraId'] = payload['CameraId']
+    
     item['DateTime'] = timestamp
-    item['AssemblyLineId'] = payload['AssemblyLineId']
     item['ImageUrl'] = payload['ImageUrl']
-    item['ImageId'] = payload['ImageId']
-    item['IsAnomalous'] = payload['DetectAnomalyResult']['IsAnomalous']
+    item['IsAnomalous'] = str(payload['DetectAnomalyResult']['IsAnomalous'])
     item['Confidence'] = Decimal(payload['DetectAnomalyResult']['Confidence'])
 
     try:
         # write the record to the database
         response = table.put_item(Item=item)
-        response['ImageDetails'] = item
+        # response['ImageDetails'] = item
         return response
 
     except Exception as e:
