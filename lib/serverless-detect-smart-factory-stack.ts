@@ -19,18 +19,12 @@ import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { Pass } from '@aws-cdk/aws-stepfunctions';
+import { StateMachine } from 'aws-cdk-lib/aws-stepfunctions';
 
 export class ServerlessDetectSmartFactoryStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
     //lambda hanlders definiton
-
-    const startStateMachineLambda = new lambda.Function(this, 'startLambda', {
-      code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/startStateMachineExecution.py', { encoding: 'utf-8' })),
-      handler: 'index.lambda_handler',
-      timeout: cdk.Duration.seconds(30),
-      runtime: lambda.Runtime.PYTHON_3_9,
-    });
 
     const classifyDefectsLambda = new lambda.Function(this, 'classifyLambda', {
       code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/classifyDefects.py', { encoding: 'utf-8' })),
@@ -52,15 +46,9 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
     });
-
-     //start bucket
-     const bucket = new s3.Bucket(this, "imageBucket");
-     bucket.grantReadWrite(startStateMachineLambda);
-     //trigger startStateMachine lambda on create object
-     bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(startStateMachineLambda));
+   
 
     //step function definition
-    const startStateMachine = new tasks.LambdaInvoke(this, 'stateStateMachineLambda', { lambdaFunction: startStateMachineLambda, outputPath: '$.Payload'});
     const DetectAnomalies = new tasks.LambdaInvoke(this, 'detectAnomaliesLambda', { lambdaFunction: detectAnomaliesLambda, outputPath: '$.Payload' });
     const classifyDefects = new tasks.LambdaInvoke(this, 'ClassifyDefects', { lambdaFunction: classifyDefectsLambda, outputPath: '$.Payload' });
     const putResult = new tasks.LambdaInvoke(this, 'putResult', { lambdaFunction: putResultInDBLambda, outputPath: '$.Payload' });
@@ -77,20 +65,61 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
     choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',true), classifyDefects);
     choice.when(sfn.Condition.booleanEquals('$.Payload.DetectAnomalyResult.IsAnomalous',false), skip);
     choice.afterwards().next(putResult);
-    const first = DetectAnomalies.next(choice);
-    const definition = startStateMachine.next(first);
+    const definition = DetectAnomalies.next(choice);
+    // const definition = startStateMachine.next(first);
 
 
     //create state machine
     const stateMachine = new sfn.StateMachine(this, 'stateMachine', {definition, timeout: cdk.Duration.minutes(5)});
 
     //lambda execution
-    startStateMachineLambda.grantInvoke(stateMachine.role);
+    
     classifyDefectsLambda.grantInvoke(stateMachine.role);
     detectAnomaliesLambda.grantInvoke(stateMachine.role);
     putResultInDBLambda.grantInvoke(stateMachine.role);
 
-    const env = {STATE_MACHINE_ARN: stateMachine.stateMachineArn};
+    const startStateMachineLambda = new lambda.Function(this, 'startLambda', {
+      code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/startStateMachineExecution.py', { encoding: 'utf-8' })),
+      handler: 'index.lambda_handler',
+      timeout: cdk.Duration.seconds(30),
+      runtime: lambda.Runtime.PYTHON_3_9,
+      environment: {
+        STATE_MACHINE_ARN : stateMachine.stateMachineArn
+      }
+    });
+
+        // 👇 Create ACM Permission Policy
+        const describeAcmCertificates = new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              resources: ['arn:aws:acm:*:*:certificate/*'],
+              actions: ['acm:DescribeCertificate'],
+            }),
+          ],
+        });
+    
+        // 👇 Create Role
+        const role = new iam.Role(this, 'example-iam-role', {
+          assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+          description: 'An example IAM role in AWS CDK',
+          inlinePolicies: {
+            DescribeACMCerts: describeAcmCertificates,
+          },
+          managedPolicies: [
+            iam.ManagedPolicy.fromAwsManagedPolicyName(
+              'AmazonAPIGatewayInvokeFullAccess',
+            ),
+          ],
+        });
+    
+
+    stateMachine.grantStartExecution(startStateMachineLambda);
+    //start bucket
+    const bucket = new s3.Bucket(this, "imageBucket");
+    bucket.grantReadWrite(startStateMachineLambda);
+    
+    //trigger startStateMachine lambda on create object
+    bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(startStateMachineLambda));
     
     // //**********SNS Topics******************************
     // const jobCompletionTopic = new sns.Topic(this, 'JobCompletion');
