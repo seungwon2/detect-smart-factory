@@ -56,6 +56,15 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       resources: ["*"]
     }));
 
+    // const itemsTable = new dynamodb.Table(this, 'ItemsTable', {
+    //   partitionKey: { name: 'itemId', type: dynamodb.AttributeType.STRING },
+    //   stream: dynamodb.StreamViewType.NEW_IMAGE
+    // });
+
+    //DynamoDB creation
+    const resultTable = new dynamodb.Table(this, 'DetectResult', {
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+    });
 
     const putResultInDBLambda = new lambda.Function(this, 'putDBLambda', {
       code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/putItemInDynamoDb.py', { encoding: 'utf-8' })),
@@ -63,9 +72,14 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
       environment: {
-        DYNAMODB_TABLE_NAME: ,
+        DYNAMODB_TABLE_NAME: resultTable.tableName,
       }
     });
+
+    putResultInDBLambda.addToRolePolicy( new iam.PolicyStatement({
+      actions: ["dynamodb:*"],
+      resources: ["*"]
+    }));
    
 
     //step function definition

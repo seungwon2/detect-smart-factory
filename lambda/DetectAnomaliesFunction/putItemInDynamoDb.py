@@ -36,14 +36,13 @@ def lambda_handler(event, context):
     item = {}
     
     item['DateTime'] = timestamp
-    item['ImageUrl'] = payload['ImageUrl']
+    item['Id'] = payload['ImageUrl']
     item['IsAnomalous'] = str(payload['DetectAnomalyResult']['IsAnomalous'])
     item['Confidence'] = Decimal(payload['DetectAnomalyResult']['Confidence'])
 
     try:
         # write the record to the database
         response = table.put_item(Item=item)
-        # response['ImageDetails'] = item
         return response
 
     except Exception as e:
