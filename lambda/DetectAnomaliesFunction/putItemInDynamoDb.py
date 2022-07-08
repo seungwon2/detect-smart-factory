@@ -22,6 +22,7 @@ import datetime
 from decimal import Decimal
 
 DYNAMODB_TABLE_NAME = os.environ['DYNAMODB_TABLE_NAME']
+REGION = os.environ['REGION']
 
 # Initiate clients
 dynamodb = boto3.resource('dynamodb', region_name=REGION)

@@ -29,10 +29,6 @@ def put_record_in_firehose(stream_record):
         print(date_time_str)
         date_time_obj = datetime.datetime.strptime(date_time_str, '%Y-%m-%dT%H:%M:%S.%f')
 
-        transformed_item['AssemblyLineId'] = new_image_item['AssemblyLineId']['S']
-        transformed_item['CameraId'] = new_image_item['CameraId']['S']
-        transformed_item['ImageId'] = new_image_item['ImageId']['S']
-        transformed_item['ImageUrl'] = new_image_item['ImageUrl']['S']
         transformed_item['DateTime'] = new_image_item['DateTime']['S']
         transformed_item['IsAnomalous'] = new_image_item['IsAnomalous']['S']
         transformed_item['Confidence'] = new_image_item['Confidence']['N']
@@ -41,13 +37,13 @@ def put_record_in_firehose(stream_record):
         transformed_item['Day'] = date_time_obj.day
         transformed_item['Hour'] = date_time_obj.hour
         transformed_item['Minute'] = date_time_obj.minute
-        transformed_item['Region'] = stream_record['awsRegion']
+        
     except Exception as e:
         print(e)
     
     j_to_firehose = json.dumps(transformed_item)
     response = firehose.put_record(
-    DeliveryStreamName=os.environ['DeliveryStreamName'],
+    DeliveryStreamName=os.environ['FirehoseName'],
     Record= {
                 'Data': j_to_firehose + '\n'
             }
