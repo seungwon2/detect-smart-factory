@@ -2,32 +2,23 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as cdk from 'aws-cdk-lib';
-import * as path from 'path';
-import * as cfn from 'aws-cdk-lib/aws-cloudformation';
-import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as eventsources from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as fs from 'fs';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
-import { Pass } from '@aws-cdk/aws-stepfunctions';
-import { StateMachine } from 'aws-cdk-lib/aws-stepfunctions';
-import * as rekognition from "aws-cdk-lib/aws-rekognition";
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { KinesisFirehoseStream } from 'aws-cdk-lib/aws-events-targets';
 import { CfnDeliveryStream } from 'aws-cdk-lib/aws-kinesisfirehose';
 
 export class ServerlessDetectSmartFactoryStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    const rekogARN = this.node.tryGetContext('rekogARN');
+    const l4vNAME = this.node.tryGetContext('l4vNAME');
+    const l4vVER = this.node.tryGetContext('l4vVER');
 
     //lambda hanlders definiton
     const classifyDefectsLambda = new lambda.Function(this, 'classifyLambda', {
@@ -35,6 +26,9 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       handler: 'index.lambda_handler',
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
+      environment: {
+        PROJECT_ARN: rekogARN
+      }
     });
 
     classifyDefectsLambda.addToRolePolicy(    
@@ -49,7 +43,8 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       timeout: cdk.Duration.seconds(30),
       runtime: lambda.Runtime.PYTHON_3_9,
       environment: {
-
+        PROJECT_NAME: l4vNAME,
+        MODEL_VERSION: l4vVER
       }
     });
 
@@ -118,8 +113,6 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       startingPosition: lambda.StartingPosition.TRIM_HORIZON,
     }));
 
-   
-
     const putResultInDBLambda = new lambda.Function(this, 'putDBLambda', {
       code: new lambda.InlineCode(fs.readFileSync('lambda/DetectAnomaliesFunction/putItemInDynamoDb.py', { encoding: 'utf-8' })),
       handler: 'index.lambda_handler',
@@ -127,6 +120,7 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
       runtime: lambda.Runtime.PYTHON_3_9,
       environment: {
         DYNAMODB_TABLE_NAME: resultTable.tableName,
+        REGION: resultTable.env.region
       }
     });
 
@@ -140,12 +134,6 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
     const DetectAnomalies = new tasks.LambdaInvoke(this, 'detectAnomaliesLambda', { lambdaFunction: detectAnomaliesLambda, outputPath: '$.Payload' });
     const classifyDefects = new tasks.LambdaInvoke(this, 'ClassifyDefects', { lambdaFunction: classifyDefectsLambda, outputPath: '$.Payload' });
     const putResult = new tasks.LambdaInvoke(this, 'putResult', { lambdaFunction: putResultInDBLambda, outputPath: '$.Payload' });
-
-
-    const jobFailed = new sfn.Fail(this, 'Job Failed', {
-      cause: 'AWS Batch Job Failed',
-      error: 'DescribeJob returned FAILED',
-    });
 
     //create chain
     const choice = new sfn.Choice(this,'IsAnomaly?');
@@ -186,5 +174,14 @@ export class ServerlessDetectSmartFactoryStack extends Stack {
     
     //trigger startStateMachine lambda on create object
     bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(startStateMachineLambda));
+
+    const createManifestLambda = new lambda.Function(this, 'createManifestLambda', {
+      code: new lambda.InlineCode(fs.readFileSync('lambda/CreateManifestFileInS3/lambda_function.py', { encoding: 'utf-8' })),
+      handler: 'index.create_manifest_file',
+      timeout: cdk.Duration.seconds(30),
+      runtime: lambda.Runtime.PYTHON_3_9,
+    });
+
+    resultBucket.grantReadWrite(createManifestLambda);
 
   }}

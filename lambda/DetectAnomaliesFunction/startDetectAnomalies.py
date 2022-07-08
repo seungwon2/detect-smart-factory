@@ -48,8 +48,8 @@ def detect_anomalies(bucket, key):
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
 
-        project_name = LFV_PROJECT_NAME
-        model_version = LFV_MODEL_VERSION
+        project_name = PROJECT_NAME
+        model_version = MODEL_VERSION
         content_type = response['ContentType']
         image = response['Body']
         image_body = image.read()

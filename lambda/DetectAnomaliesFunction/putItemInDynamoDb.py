@@ -37,7 +37,7 @@ def lambda_handler(event, context):
     item = {}
     
     item['DateTime'] = timestamp
-    item['Id'] = payload['ImageUrl']
+    item['id'] = payload['ImageUrl']
     item['IsAnomalous'] = str(payload['DetectAnomalyResult']['IsAnomalous'])
     item['Confidence'] = Decimal(payload['DetectAnomalyResult']['Confidence'])
 

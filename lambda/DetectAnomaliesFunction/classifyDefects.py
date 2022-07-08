@@ -4,6 +4,7 @@ import json
 import urllib.request
 import urllib.parse
 import urllib.error
+import os
 
 # Initiate clients
 rekognition = boto3.client('rekognition')
@@ -11,6 +12,7 @@ s3 = boto3.client('s3')
 PROJECT_ARN = os.environ['PROJECT_ARN']
 
 print('Loading function')
+print(PROJECT_ARN)
 
 # --------------- Main handler ------------------
 
